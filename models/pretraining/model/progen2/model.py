@@ -31,6 +31,7 @@ from transformers.activations import ACT2FN
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_outputs import CausalLMOutputWithPast as _CausalLMOutputWithPast
 from transformers.modeling_utils import PreTrainedModel
+from transformers import GenerationMixin
 from transformers.utils import logging
 from transformers.utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_progen import ProGenConfig
@@ -546,7 +547,7 @@ class ProGenModel(ProGenPreTrainedModel):
         )
 
 
-class ProGenForCausalLM(ProGenPreTrainedModel):
+class ProGenForCausalLM(ProGenPreTrainedModel, GenerationMixin):
     _keys_to_ignore_on_load_missing = [r"h\.\d+\.attn\.masked_bias", r"h\.\d+\.attn\.bias", r"lm_head\.weight"]
 
     def __init__(self, config):
