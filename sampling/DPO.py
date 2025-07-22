@@ -35,7 +35,15 @@ class DPOInpaint(Algo):
         if type(sequences) == str:
             os.system(f"mafft --quiet --add {sequences} --keeplength data/{self.name}.fasta > tmp/aligned.fasta")
         else:
-            with open(f"tmp/temp.fasta", "w") as f:
+            folder_path = "tmp"
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+                print(f"Created folder: {folder_path}")
+            else:
+                print(f"Folder already exists: {folder_path}")
+
+            file_path = os.path.join(folder_path, "temp.fasta")
+            with open(file_path, "w") as f:
                 for i, seq in enumerate(sequences):
                     f.write(f">{i}\n")
                     f.write(f"{seq}\n")
