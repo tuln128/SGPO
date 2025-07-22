@@ -5,7 +5,6 @@ channels:
   - bioconda  # for mafft and mmseqs2
 dependencies:
   - python=3.9
-  - pytorch  # handled via conda for GPU compatibility if needed
   - lightning
   - transformers
   - wandb
@@ -17,5 +16,11 @@ dependencies:
   - botorch
   - pip
   - seaborn
+  - torch-scatter # for later installation of evodiff
   - pip:
-    - hydra-core
+      - hydra-core
+      - numpy
+      - torch  # handled via conda for GPU compatibility if needed
+      - evodiff
+      - flash-attn
+  
