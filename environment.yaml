@@ -2,7 +2,7 @@ name: SGPO
 channels:
   - conda-forge
   - defaults
-  - bioconda  # for mafft and mmseqs2
+  - bioconda  # added for mafft and mmseqs2 installation
 dependencies:
   - python=3.9
   - lightning
@@ -16,11 +16,11 @@ dependencies:
   - botorch
   - pip
   - seaborn
-  - torch-scatter # for later installation of evodiff
+  - torch-scatter # adde for later installation of evodiff
   - pip:
       - hydra-core
       - numpy
       - torch  # handled via conda for GPU compatibility if needed
-      - evodiff
-      - flash-attn
+      - evodiff # added to install together with SGPO core components
+      - flash-attn # added to install together with SGPO core components
   
