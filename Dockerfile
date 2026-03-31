@@ -1,0 +1,33 @@
+FROM nvcr.io/nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+# Set CUDA_HOME so flash-attn can find nvcc
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=$CUDA_HOME/bin:$PATH
+ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+RUN apt update -y && apt install -y wget git build-essential ninja-build
+RUN apt-get update -y && apt-get install libxrender1 -y
+
+RUN find /usr/local -name "nvcc" 2>/dev/null
+RUN ls /usr/local/cuda* 2>/dev/null || echo "No cuda dir found"
+
+RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+RUN bash Miniforge3-$(uname)-$(uname -m).sh -bup /opt/miniforge3
+RUN rm Miniforge3-$(uname)-$(uname -m).sh
+
+WORKDIR /workspace
+
+COPY ./environment.yaml /workspace/environment.yaml
+
+# Step 1: Create conda env WITHOUT flash-attn
+RUN /opt/miniforge3/bin/conda env create -f environment.yaml
+
+ENV PATH=/opt/miniforge3/envs/SGPO/bin:$PATH
+
+# Step 2: Install flash-attn separately with CUDA env vars explicitly set
+RUN export CUDA_HOME=/usr/local/cuda && \
+    export PATH=$CUDA_HOME/bin:$PATH && \
+    export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH && \
+    /opt/miniforge3/envs/SGPO/bin/pip install flash-attn --no-build-isolation
+ 
+SHELL ["/bin/bash", "-c"]
+RUN echo "source /opt/miniforge3/etc/profile.d/conda.sh && conda activate SGPO" >> ~/.bashrc
