@@ -4,7 +4,7 @@ Repository for protein fitness optimization by guiding the generations from disc
 
 ## Installation:
 ```
-conda env create -f environment.yaml
+conda env create -f environment.yaml #transformers version 4.48.1 recommended
 conda activate SGPO
 pip install evodiff
 pip install flash-attn
@@ -12,15 +12,16 @@ pip install flash-attn
 Processed MSA sequences (for training the prior) and fitness data (for guidance) for TrpB and CreiLOV are preloaded in this repo under `data`. Raw data, pretrained model checkpoints, and experimental outputs can be downloaded from [huggingface](https://huggingface.co/jsunn-y/SGPO).
 
 ## Code Organization:
-1. `configs/`: hydra config files for running experiments
-2. `data/`: processed data files and code for data processing
-3. `dataset/`: dataset objects for training value functions used in guidance
-4. `exps/`: outputs from experiments, mainly generated sequences and associated fitness values
-5. `models/`: diffusion models, denoising model architectures are provided in `models/pretraining/model/`
-6. `oracle/`: oracle checkpoints for evaluating "ground truth" fitness and code for training and running the oracle
-7. `sampling/`: code for sampling using various guidance algorithms
-8. `scripts/`: shell scripts for running many experiments at once
-9. `training/`: code for training the value functions used in guidance
+1. `APEXGo/`: code for reproducing the APEXGo baseline for latent space BO, based on the [original repository](https://github.com/Yimeng-Zeng/APEXGo/tree/main).
+2. `configs/`: hydra config files for running experiments
+3. `data/`: processed data files and code for data processing
+4. `dataset/`: dataset objects for training value functions used in guidance
+5. `exps/`: outputs from experiments, mainly generated sequences and associated fitness values
+6. `models/`: diffusion models, denoising model architectures are provided in `models/pretraining/model/`
+7. `oracle/`: oracle checkpoints for evaluating "ground truth" fitness and code for training and running the oracle
+8. `sampling/`: code for inference-time sampling using various guidance algorithms
+9. `scripts/`: shell scripts for running many experiments at once
+10. `training/`: code for training the value functions used in guidance
 
 ## Model Pretraining:
 Pretrained models are available on [huggingface](https://huggingface.co/jsunn-y/SGPO) and can be copied over into `checkpoints`. Alternatively, commands used to run pretraining are provided in `scripts/run_pretraining.sh`. Pretraining should take less than 1 hour for each diffusion model and several hours for each language model on a single H100. 
@@ -30,7 +31,7 @@ Example command:
 python pretrain.py pretrain_model={pretrain_model} data={data}
 ```
 - pretrain_model = `continuous`, `continuous_ESM`, `d3pm`, `d3pm_finetune`, `udlm`, `mdlm`, `causalLM_finetune`
-- data = `TrpB`, `CreiLOV`
+- data = `TrpB`, `CreiLOV`, `GB1`
 
 ## Unconditional Sampling:
 Commands to sample unconditionally from a pretrained prior without guidance are provided in `scripts/run_prior_sample.sh`. These samples are only mutated at the positions under study in the case of TrpB. Each command should take minutes on a single H100.
@@ -39,7 +40,7 @@ Example command:
 ```
 python prior_sample.py pretrained_ckpt={pretrain_model}/{data} data={data} model={model}
 ```
-- data = `TrpB`, `CreiLOV`
+- data = `TrpB`, `CreiLOV`, `GB1`
   
 Supported prior models:
 | Model| `pretrain_model` (checkpoint name) | `model` (prior model type) | 
@@ -60,7 +61,7 @@ Alternatively, sampling raw sequences with no post processing can be accomplishe
 
 ### Perplexity Calculation
 ```python perplexity_calculation.py```
-Calculates the perplexities of unconditionally generated sequences using ProGen2-base. Output will be saved to `exps/{data}/perplexity/perplexity.csv`.
+Calculates the perplexities of unconditionally generated sequences using ProGen2-base. Output will be saved to `exps/protein/{data}/perplexity/perplexity.csv`.
 
 ## Guided Sampling:
 
@@ -87,9 +88,11 @@ python pareto.py pretrained_ckpt={pretrain_model}/{data} data={data} model={mode
 
 Output will be saved under `exps`:
  - `summary.csv` with generated sequences and associated fitness values.
+
+Note: for NOS runs, if you would like to do a more extensive hyperparameter search, please use `pareto_NOS_hyperparameter.py` instead.
   
 ### Iterative Adaptive Optimization Experiment
-Using a fixed guidance strength, simulates batch "Bayesian optimization" over multiple rounds of guidance. An ensemble of value functions models is trained between each round, and "Thompson sampling" is used to select a value function for guiding each generated sampled. Commands are given in `scripts/run_iterative.sh`. Each command should take less than one hour on a single H100.
+Using a fixed guidance strength, simulates batch "Bayesian optimization" over multiple rounds of guidance. An ensemble of value functions models is trained between each round, and "Thompson sampling" is used to select a value function for guiding generated samples. Commands are given in `scripts/run_iterative.sh`. Each command should take less than one hour on a single H100.
 
 Template command:
 ```
@@ -107,7 +110,7 @@ The processed data and oracle models needed to run downstream experiments are pr
 [Jackhmmer](https://github.com/EddyRivasLab/hmmer/tree/master) was used to search for homologous proteins and generate a multiple sequence alignment (MSA). The steps to perform the Jackhmmer search and process the outputs is provided in `data/hmmer_processing.ipynb`. The inputs to this model are (1) a parent sequence as a target and (2) all sequences in Uniref90 (December 2024). Jackhmmer outputs have been uploaded to [huggingface](https://huggingface.co/jsunn-y/SGPO).
 
 ### Fitness data
-Raw fitness data were downloaded from the [CreiLOV](https://pubs.acs.org/doi/10.1021/acssynbio.2c00662) and [TrpB](https://www.pnas.org/doi/10.1073/pnas.2400439121) datasets, respectively, and have been uploaded to [huggingface](https://huggingface.co/jsunn-y/SGPO). These data were normalized and processed using the steps provided in `data/process_fitness.ipynb`.
+Raw fitness data were downloaded from the [CreiLOV](https://pubs.acs.org/doi/10.1021/acssynbio.2c00662), [TrpB](https://www.pnas.org/doi/10.1073/pnas.2400439121), and [GB1](https://www.sciencedirect.com/science/article/pii/S0960982214012688) datasets, respectively, and have been uploaded to [huggingface](https://huggingface.co/jsunn-y/SGPO). These data were normalized and processed using the steps provided in `data/process_fitness.ipynb`.
 
 ### Oracle training:
 Pretrained oracles are uploaded to `oracle/checkpoints`. Alternatively, oracle training can be reproduced with the command
@@ -124,3 +127,12 @@ Generates random samples for downstream analysis.
 ```
 python baseline_sample.py
 ```
+
+
+
+
+
+
+
+
+

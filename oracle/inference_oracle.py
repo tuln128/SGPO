@@ -16,12 +16,13 @@ def penalty(hamming_distances, cutoff=5, rate=0.95):
     else:
         return rate ** (hamming_distances - cutoff)
 
-def inference_oracle(split, protein, model_path, impose_penalty=True):
+def inference_oracle(split, protein, model_path, impose_penalty=True, full_seq=None):
     """
     impose_penalty: whether or not to penalize the fitness of sequences that are too different from the full sequence
     """
     test_dataset = OracleDataset(protein=protein, split=split) #accepts split as a string, or list of strings
-    full_seq = SeqIO.read(f"data/{protein}/parent.fasta", "fasta").seq
+    if full_seq is None:
+        full_seq = SeqIO.read(f"data/{protein}/parent.fasta", "fasta").seq
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     input_dim = test_dataset.X.shape[1]
@@ -51,6 +52,9 @@ def inference_oracle(split, protein, model_path, impose_penalty=True):
                         rate = 0.99
                     elif protein == "TrpB":
                         cutoff = 233 #shouldn't occur
+                        rate = 0.99
+                    elif protein == "GB1":
+                        cutoff = 33 
                         rate = 0.99
                     #get the hamming distances between the sequences and the full sequence
                     hamming_distances = [hamming_distance(full_seq, seq) for seq in sequences]

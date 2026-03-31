@@ -13,6 +13,7 @@ import wandb
 from models.pretraining.collaters import collate_fn_mapping
 from util.seed import set_seed  
 import tqdm
+import copy
 from dataset.protein import ProteinPredictorDataset
 from training.train_GP_classifier import train_classifier, get_thompson_sample
 
@@ -71,7 +72,7 @@ def main(config):
             seq_len = data_config.seq_len
             time_conditioned = config.algorithm.time_conditioned if 'time_conditioned' in config.algorithm else True #train classifier on noisy data for most methods, except DAPS
                 
-            if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name:
+            if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name or 'NOS' in config.algorithm.name:
                 net = instantiate(config.model.model, model_name=config.pretrained_ckpt, seq_len=seq_len, device=device, _recursive_=recursive) #load pretrained model
 
                 if 'cls_guidance' in config.algorithm.name:
@@ -82,6 +83,28 @@ def main(config):
                     #classifier = instantiate(config.problem.model, data_config=data_config, device=device)
                     algorithm = instantiate(config.algorithm.method, alpha=0., n_max_mutations=n_max_mutations, net=net, forward_op=None, data_config=data_config) #dummy to get the project_fn, replace later
                     collate_fn = collate_fn_mapping['cls_guidance'](tokenizer=net.tokenizer)
+                elif 'NOS' in config.algorithm.name and 'continuous' in config.model.name:
+                    #freeze the transformer weights
+                    for param in net.model.parameters():
+                        param.requires_grad = False
+
+                    #classifier = instantiate(config.problem.model, data_config=data_config, _recursive_=recursive)
+                    algorithm = instantiate(config.algorithm.method, nos_stability_coef=None, n_max_mutations=n_max_mutations, net=net, forward_op=None, data_config=data_config)
+                    collate_fn = collate_fn_mapping['cls_guidance'](tokenizer=net.tokenizer)
+                elif 'NOS' in config.algorithm.name:
+                    pretrained_backbone = copy.deepcopy(net.model.backbone)
+                    # Remove the last layer for the classifier
+                    if hasattr(pretrained_backbone, 'output_layer'):  #DiT
+                        delattr(pretrained_backbone, 'output_layer')
+                    #freeze backbone for NOS
+                    for param in pretrained_backbone.parameters():
+                        param.requires_grad = False
+
+                    #classifier = instantiate(config.problem.model, tokenizer=net.tokenizer, pretrained_backbone=pretrained_backbone, _recursive_=recursive)
+                    algorithm = instantiate(config.algorithm.method, nos_stability_coef=None, n_max_mutations=n_max_mutations, net=net, forward_op=None, data_config=data_config) 
+                    # algorithm = instantiate(config.algorithm.method, nos_stability_coef=0., n_max_mutations=n_max_mutations, net=net, forward_op=classifier, data_config=data_config) #dummy to get the project_fn, replace later
+                    collate_fn = collate_fn_mapping['cls_guidance'](tokenizer=net.tokenizer)
+
             elif 'DPO' in config.algorithm.name:
                 net = instantiate(config.model.model, load_ref_model=True, model_name=config.pretrained_ckpt, seq_len=seq_len, device=device) 
                 #initiate algo once, doesn't need to be changed for DPO
@@ -106,15 +129,17 @@ def main(config):
             summary_df = pd.concat([summary_df, dataset.summary_df], axis=0)
 
             #### Now get ready to sample unconditionally using the ideal guidance parameter found in pareto.py ####
-            if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name:
+            if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name or 'NOS' in config.algorithm.name:
                 #TODO: check to make sure the algorithm is getting updated correctly
                 algorithm = instantiate(config.algorithm.method, n_max_mutations=n_max_mutations, net=net, forward_op=None, data_config=data_config) #dummy to get the project_fn, replace later
                 collate_fn = collate_fn_mapping['cls_guidance'](tokenizer=net.tokenizer)
-                #not sure if this is necessary or helps
+                #not sure if this is necessary, only for saving results
                 if 'cls_guidance' in config.algorithm.name:
                     guidance_param = config.algorithm.method.temperature
                 elif 'DAPS' in config.algorithm.name:
                     guidance_param = config.algorithm.method.alpha
+                elif 'NOS' in config.algorithm.name:
+                    guidance_param = config.algorithm.method.nos_stability_coef
                 
             for round in range(config.num_rounds):
                 #TODO implement better model tracking in wandb and save the models?
@@ -141,7 +166,7 @@ def main(config):
                 # for i in batch_steps:
 
                 #train ensemble of predictor models/finetune models
-                if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name:
+                if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name or 'NOS' in config.algorithm.name:
                     print(f"Training predictor model.")
                     #classifiers = []
                     processes = []
@@ -156,7 +181,18 @@ def main(config):
                     else:
                         for ensemble_idx in range(config.n_ensemble):
                             set_seed(config.seed + round*config.n_ensemble + ensemble_idx)
-                            classifier = instantiate(config.problem.model, data_config=data_config, device=device)
+
+                            if 'NOS' in config.algorithm.name and 'continuous' in config.model.name:
+
+                                classifier = instantiate(config.problem.model, data_config=data_config, _recursive_=recursive)
+
+                                #algorithm = instantiate(config.algorithm.method, n_max_mutations=n_max_mutations, net=net, forward_op=classifier, data_config=data_config)
+                            elif 'NOS' in config.algorithm.name:
+
+                                classifier = instantiate(config.problem.model, tokenizer=net.tokenizer, pretrained_backbone=pretrained_backbone, _recursive_=recursive)
+                            else:
+                                #CG and DAPS
+                                classifier = instantiate(config.problem.model, data_config=data_config, device=device)
                             
                             #Classifier guidance or posterior sampling
                             # classifier = instantiate(config.problem.train_function, classifier, net, dataloader, train_config=config.problem.train, project_fn=algorithm.project)
@@ -195,6 +231,8 @@ def main(config):
                         net = instantiate(config.problem.train_function, net=net, train_loader=dataloader, train_config=config.problem.train)
                         #nets.append(net.to("cpu"))
                     guidance_param = config.problem.train.beta
+                else:
+                    raise NotImplementedError(f"Unknown algorithm {config.algorithm.name}.")
 
                 #generate samples with "thompson sampling" and steering/guidance
                 set_seed(config.seed + round)
@@ -202,7 +240,7 @@ def main(config):
                 with samples_pbar as pbar:
                     pbar.set_description(f"Sampling {config.num_samples} samples")
                     while n_total_new_samples < config.num_samples and iterations < max_iterations:
-                        if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name:
+                        if 'cls_guidance' in config.algorithm.name or 'DAPS' in config.algorithm.name or 'NOS' in config.algorithm.name:
                             #if thompson sampling, random sample one model
                             if config.thompson_sampling:
                                 #GP
@@ -218,7 +256,7 @@ def main(config):
                             algorithm.update_model(classifier)
                     
                         #train model for each parameter for finetuning-based methods
-                        if 'DPO' in config.algorithm.name:
+                        elif 'DPO' in config.algorithm.name:
                             #if thompson sampling, random sample one model
                             if config.thompson_sampling:
                                 #net = nets[np.random.randint(0, config.n_ensemble)].to(device)
@@ -226,6 +264,8 @@ def main(config):
                             else:
                                 raise NotImplementedError("Only Thompson sampling is supported for now.")
                             algorithm.update_model(net)
+                        else:
+                            raise NotImplementedError(f"Unknown algorithm {config.algorithm.name}.")
                             
                         #Sample new sequences
                         print(f'Sampling for steered round with guidance parameter {guidance_param}.')
@@ -246,6 +286,20 @@ def main(config):
 
                 summary_df = pd.concat([summary_df, new_dataset], axis=0)
                 summary_df.to_csv(summary_save_path, index=False)
+
+                #if NOS, delete the saved model directory to save space
+                if 'NOS' in config.algorithm.name:
+                    if os.path.exists(save_dir):
+                        for file in os.listdir(save_dir):
+                            file_path = os.path.join(save_dir, file)
+                            try:
+                                if os.path.isfile(file_path) or os.path.islink(file_path):
+                                    os.unlink(file_path)
+                                elif os.path.isdir(file_path):
+                                    os.rmdir(file_path)
+                            except Exception as e:
+                                print(f'Failed to delete {file_path}. Reason: {e}')
+                        os.rmdir(save_dir)
 
 
 if __name__ == "__main__":

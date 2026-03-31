@@ -1,0 +1,13 @@
+python train_vae.py \
+    --lr 0.0002 \
+    --batch_size 512 \
+    --k 1 \
+    --d_model 128 \
+    --dropout 0.05 \
+    --kl_factor 0.0001 \
+    --encoder_dim_feedforward 256 \
+    --decoder_dim_feedforward 256 \
+    --encoder_num_layers 6 \
+    --decoder_num_layers 6 \
+    --wandb_entity {replace with username} \
+    --load_ckpt {replace with path to ckpt.pkl if continuing training} \
