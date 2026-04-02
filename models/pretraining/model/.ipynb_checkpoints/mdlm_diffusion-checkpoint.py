@@ -360,8 +360,13 @@ class MDLMDiffusion(L.LightningModule):
     def _d3pm_parameterization(self, logits):
         if self.subs_masking:
             logits[:, :, self.mask_index] += self.neg_infinity
+        
+        # ✅ Never predict concat token as output
+        if self.concat_id is not None:
+            logits[:, :, self.concat_id] += self.neg_infinity
+    
         logits = logits - torch.logsumexp(logits, dim=-1,
-                                                                            keepdim=True)
+                                          keepdim=True)
         return logits
 
     def _sedd_parameterization(self, logits, xt, sigma):
@@ -622,7 +627,14 @@ class MDLMDiffusion(L.LightningModule):
         if self.diffusion == 'uniform':
             uniform_tensor = torch.randint(
             0, self.vocab_size, x.shape, device=x.device)
-            return torch.where(move_indices, uniform_tensor, x)
+
+            corrupted = torch.where(move_indices, uniform_tensor, x)
+            # ✅ Preserve concat token positions — never corrupt chain boundary
+            if self.concat_id is not None:
+                concat_positions = (x == self.concat_id)
+                corrupted = torch.where(concat_positions, x, corrupted)
+            return corrupted
+            
         elif self.diffusion == 'uniform_data_marginals':
             return torch.where(
                 move_indices,
@@ -1022,7 +1034,7 @@ class MDLMDiffusion(L.LightningModule):
         token_nll = batch_nll / count
 
         if recon_loss is not None and diffusion_loss is not None:
-            assert attention_mask is None #only supports this for now
+            # assert attention_mask is None #only supports this for now, disabled, as variable-length sequence support has already been added
             with torch.no_grad():
                 recon_loss_batch = recon_loss.sum() / count
                 diffusion_loss_batch = diffusion_loss.sum() / count
