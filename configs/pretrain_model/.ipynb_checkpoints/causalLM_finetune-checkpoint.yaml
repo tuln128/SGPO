@@ -1,0 +1,41 @@
+name: causalLM_finetune
+model:
+  _target_: models.pretraining.model.causalLM_progen2.CausalLMPretraining
+
+  model_config:
+    name: causalLM_progen2
+    device: cuda
+    pretrained_ckpt: progen2-small
+    cache_dir:
+
+  network: 
+  tokenizer:
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1e-4
+
+  lr_scheduler:
+    _target_:  transformers.get_linear_schedule_with_warmup
+    num_warmup_steps: 10 #could play around with this
+    num_training_steps: 10 #${max_epochs}, check this
+
+train: 
+  seed: 42
+  gradient_clip: 10.0 #update this or get rid of it
+  min_epochs: 10
+  max_epochs: 10
+  early_stop_patience: 0 #need this?
+  batch_size: 32
+  val_interval: 0.25 #per epoch, also how often the model is saved
+  log_interval: 10 #per step
+  workers: 4
+  ngpu: 1 #must agree with device
+
+data:
+  dataset_suffix: MSA #was MSA_aligned
+  splits: [train, validation]
+
+# hydra:
+#   run:
+#     dir: ./outputs/${now:%Y-%m-%d_%H-%M-%S}

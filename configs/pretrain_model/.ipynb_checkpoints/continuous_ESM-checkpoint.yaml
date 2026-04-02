@@ -1,0 +1,56 @@
+name: continuous_ESM # change to continuous_ESM for ESM embeddings
+model:
+  _target_: models.pretraining.model.continuous_diffusion.GaussianDiffusion
+
+  # Add a "model_config" just to keep shape consistent:
+  model_config:
+    name: continuous_diffusion  # used for check
+    _lambda: 0
+    mask: uniform
+    device: cuda
+
+  network:
+    _target_: models.pretraining.model.continuous_diffusion.GaussianDiffusionTransformer
+    in_channels: 128            # choose an embedding dimension as needed
+    vocab_size: 33             # length of protein alphabet, e.g. len(MSA_ALPHABET), use 33 for ESM
+    dropout: 0.1               # dropout rate
+    bert_config_name: "prajjwal1/bert-medium" #"prajjwal1/bert-small" #consider making this bigger, only 4 layers
+    target_channels: 0        # if you don't need regression targets
+    discr_stop_grad: True
+    esm_model_name: 'facebook/esm2_t12_35M_UR50D' # use 'facebook/esm2_t12_35M_UR50D' for ESM checkpoint and null for normal continuous
+    use_esm_head: True         # set to true to use the ESM head instead of the BERT head
+
+  noise_schedule:
+    _target_: models.pretraining.collaters.GaussianDiffusionSchedule
+    timesteps: 500
+    noise_schedule: cosine    # or linear, quadratic, etc. as supported
+    noise_scale: 1.0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1e-4
+
+  lr_scheduler:
+    _target_: transformers.get_linear_schedule_with_warmup
+    num_warmup_steps: 10
+    num_training_steps: 10  # adjust based on training length/epochs
+
+  tokenizer:
+    _target_: models.pretraining.collaters.ESMTokenizer
+    esm_model_name: "esm2_t12_35M_UR50D"
+
+train:
+  seed: 42
+  gradient_clip: 10.0
+  min_epochs: 25
+  max_epochs: 25
+  early_stop_patience: 0
+  batch_size: 64
+  val_interval: 1.0
+  log_interval: 10
+  workers: 4
+  ngpu: 1
+
+data:
+  dataset_suffix: MSA
+  splits: [train, validation]

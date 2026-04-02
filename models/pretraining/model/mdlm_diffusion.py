@@ -136,6 +136,9 @@ class MDLMDiffusion(L.LightningModule):
         self.mask_index = self.tokenizer.mask_id
         self.parameterization = self.config.parameterization
 
+        # Store concat_id if available
+        self.concat_id = getattr(self.tokenizer, 'concat_id', None)
+
         self.diffusion = config.diffusion
         if config.parameterization == 'ar':
             self.limiting_distribution = None
@@ -146,6 +149,16 @@ class MDLMDiffusion(L.LightningModule):
             elif self.diffusion == 'uniform':
                 limiting_distribution = torch.ones(
                 (1, 1, self.vocab_size), dtype=self.dtype) / self.vocab_size
+                
+                # Zero out special tokens from limiting distribution
+                for special_id in [self.mask_index,
+                                   self.tokenizer.pad_id,
+                                   self.concat_id]:
+                    if special_id is not None:
+                        limiting_distribution[0, 0, special_id] = 0.0
+                # Renormalize
+                limiting_distribution = limiting_distribution / \
+                                        limiting_distribution.sum()
             else:
                 raise NotImplementedError(
                 f"Diffusion type {self.diffusion} not implemented.")
@@ -325,7 +338,11 @@ class MDLMDiffusion(L.LightningModule):
     def _subs_parameterization(self, logits, xt):
         # log prob at the mask index = - infinity
         logits[:, :, self.mask_index] += self.neg_infinity
-        
+
+        # Never predict [SEP] token as an amino acid output
+        if self.concat_id is not None:
+            logits[:, :, self.concat_id] += self.neg_infinity
+            
         # Normalize the logits such that x.exp() is
         # a probability distribution over vocab_size.
         logits = logits - torch.logsumexp(logits, dim=-1,
@@ -471,8 +488,15 @@ class MDLMDiffusion(L.LightningModule):
         # if 'attention_mask' in batch:
         #     attention_mask = batch['attention_mask']
         # else:
-        attention_mask = None
-        losses = self._loss(batch, attention_mask)
+        
+        # Unpack attention mask from collater output
+        if isinstance(batch, (tuple, list)):
+            x0, attention_mask = batch
+        else:
+            x0 = batch
+            attention_mask = None
+            
+        losses = self._loss(x0, attention_mask)
         loss = losses.loss
 
         if prefix == 'train':
@@ -847,7 +871,7 @@ class MDLMDiffusion(L.LightningModule):
                                                     dim=-1,
                                                     index=x0[:, :, None]).squeeze(-1)
 
-    def _forward_pass_diffusion(self, x0, cond=None):
+    def _forward_pass_diffusion(self, x0, attention_mask=None, cond=None):
         t = self._sample_t(x0.shape[0], x0.device)
         if self.T > 0:
             t = (t * self.T).to(torch.int)
@@ -866,6 +890,15 @@ class MDLMDiffusion(L.LightningModule):
             unet_conditioning = sigma[:, None]
             move_chance = 1 - torch.exp(-sigma[:, None])
 
+        # Only corrupt real token positions, not padding or [SEP]
+        if attention_mask is not None:
+            # Zero out move_chance for padded positions
+            move_chance = move_chance * attention_mask.float()
+            # Zero out move_chance for [SEP] positions
+            if self.concat_id is not None:
+                sep_positions = (x0 == self.concat_id).float()
+                move_chance = move_chance * (1 - sep_positions)
+            
         xt = self.q_xt(x0, move_chance)
         model_output = self.forward(xt, unet_conditioning)
         #model_output = self.forward(xt, time_conditioning, cond=cond) #the old line
@@ -966,16 +999,25 @@ class MDLMDiffusion(L.LightningModule):
             loss = - logprobs.gather(
                 -1, output_tokens[:, :, None])[:, :, 0]
         else:
-            loss = self._forward_pass_diffusion(input_tokens)
-        
+            # Pass attention_mask through to _forward_pass_diffusion
+            loss = self._forward_pass_diffusion(
+                input_tokens, attention_mask=attention_mask)  # ← add this
+            
         if isinstance(loss, dict):
             recon_loss = loss['recon_loss']
             diffusion_loss = loss['diffusion_loss']
             loss = loss['loss']
-        
-        nlls = loss * attention_mask if attention_mask is not None else loss
-        count = attention_mask.sum() if attention_mask is not None else loss.size(0)
 
+        # Apply attention mask excluding pad and concat positions
+        if attention_mask is not None:
+            if self.concat_id is not None:
+                concat_mask = (input_tokens != self.concat_id).long()
+                attention_mask = attention_mask * concat_mask
+                
+        nlls = loss * attention_mask if attention_mask is not None else loss
+        count = attention_mask.sum() if attention_mask is not None \
+                else torch.tensor(loss.numel())
+        
         batch_nll = nlls.sum()
         token_nll = batch_nll / count
 

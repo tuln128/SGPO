@@ -571,6 +571,7 @@ class PredictorCollater(object):
 
         return x, y
 
+"""
 class MDLMCollater(object):
     
     def __init__(self, tokenizer):
@@ -585,5 +586,47 @@ class MDLMCollater(object):
         for i, seq in enumerate(tokenized):
             padded[i, :len(seq)] = seq
         return padded
+"""
+# UPDATE MDLMCollater to deal with variable length of Ab sequences
+class MDLMCollater(object):
+
+    def __init__(self, tokenizer, max_len=None):
+        self.tokenizer = tokenizer
+        self.K = self.tokenizer.K
+        self.pad_id = self.tokenizer.pad_id
+        self.max_len = max_len  # fixed from config.data.seq_len
+
+    def __call__(self, sequences):
+        # Tokenize each sequence
+        tokenized = []
+        for s in sequences:
+            ids = self.tokenizer.tokenize(s)
+            if len(ids) > 0:
+                tokenized.append(torch.tensor(ids, dtype=torch.long))
+
+        # If all empty return empty batch
+        if len(tokenized) == 0:
+            return (
+                torch.empty(0, dtype=torch.long),
+                torch.empty(0, dtype=torch.long)
+            )
+
+        # Use fixed max_len from config, or dynamic if not set
+        max_len = self.max_len if self.max_len is not None \
+                  else max(len(t) for t in tokenized)
+
+        batch_size = len(tokenized)
+
+        # Pad all sequences to max_len
+        padded = torch.full(
+            (batch_size, max_len), self.pad_id, dtype=torch.long)
+        for i, seq in enumerate(tokenized):
+            seq_len = min(len(seq), max_len)   # truncate if over max_len
+            padded[i, :seq_len] = seq[:seq_len]
+
+        # Attention mask: 1 for real tokens, 0 for padding
+        attention_mask = (padded != self.pad_id).long()
+
+        return padded, attention_mask   # both (batch_size, max_len)
 
 collate_fn_mapping = {"cls_guidance": PredictorCollater, "DPO": CausalCollater}

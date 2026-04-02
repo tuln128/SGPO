@@ -1,0 +1,13 @@
+name: Antibody
+data_path: data/Antibody/fitness.csv
+pretrain_data_prefix: data/Antibody/
+full_seq: null
+seq_len: 512            # heavy (~220) + | (1 token) + light (~220) + buffer
+residues: null
+seed: 42
+alphabet: 'ACDEFGHIKLMNPQRSTVWYBZXJOU-*#@!|'   # ← | appended at the end
+alphabet_size: 32                                # ← 31 + 1
+oracle_model_path: oracle/checkpoints/Antibody
+heavy_max_len: 220
+light_max_len: 220
+sep_token: '|'          # ← updated

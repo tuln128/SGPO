@@ -1,0 +1,60 @@
+name: d3pm
+model:
+  _target_: models.pretraining.model.d3pm_evodiff.ByteNetDiffusion
+
+  model_config:
+    name: d3pm_evodiff
+    _lambda: 0 #reweighting term for the loss function
+    mask: uniform #could also support blosum or absorbing
+    device: cuda
+    pretrained_evodiff_ckpt:
+
+  network:
+    #config based on smaller evodiff model https://github.com/microsoft/evodiff/blob/main/config/config38M.json
+    _target_: evodiff.model.ByteNetLMTime
+    d_embedding: 8
+    d_model: 1024
+    n_layers: 16
+    kernel_size: 5
+    r: 128 #used to calculate dilation factor
+    causal: False
+    rank: #None #rank of compressed weight matrices
+    dropout: 0.0
+    tie_weights: False
+    final_ln: False #not sure what this defaults to in evodff
+    slim: True
+    activation: gelu #relu or gelu
+    timesteps: 500 #max timesteps in DM model, check what evodiff uses
+
+  #might need to change this a bit for other masking strategies
+  tokenizer:
+    _target_: evodiff.utils.Tokenizer
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1e-4
+
+  lr_scheduler:
+    _target_:  transformers.get_linear_schedule_with_warmup
+    num_warmup_steps: 10 #could play around with this
+    num_training_steps: 10 #${max_epochs}, check this
+
+train: 
+  seed: 42
+  gradient_clip: 10.0 #update this or get rid of it
+  min_epochs: 5
+  max_epochs: 5
+  early_stop_patience: 0 #need this?
+  batch_size: 64
+  val_interval: 1.0 #per epoch
+  log_interval: 10 #per step
+  workers: 4
+  ngpu: 1 #must agree with device
+
+data:
+  dataset_suffix: MSA
+  splits: [train, validation]
+  
+# hydra:
+#   run:
+#     dir: ./outputs/${now:%Y-%m-%d_%H-%M-%S}

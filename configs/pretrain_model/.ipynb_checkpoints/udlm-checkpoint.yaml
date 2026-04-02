@@ -1,0 +1,91 @@
+name: udlm
+model:
+  _target_: models.mdlm.MDLMDiffusion
+  config:
+    mode: train  # train / ppl_eval / sample_eval
+    diffusion: uniform
+    backbone: dit  # dit / dimamba / ar
+    parameterization: d3pm  # subs / d3pm / sedd
+    time_conditioning: True
+    T: 0  # 0 (continuous time) / 1000 
+    subs_masking: False
+    seed: 1
+    eval_batch_size: 512
+    zero_recon_loss: True
+  
+    training:
+      ema: 0.9999
+      antithetic_sampling: True
+      importance_sampling: False
+      sampling_eps: 1e-3
+      change_of_variables: False
+
+    optim:
+      weight_decay: 0
+      lr: 3e-5 #lowered the learning rate
+      beta1: 0.9
+      beta2: 0.999
+      eps: 1e-8
+
+    sampling:
+      predictor: ddpm_cache  # analytic, ddpm, ddpm_cache
+      steps: 128
+      noise_removal: True
+      num_sample_batches: 2  # Total samples: `num_gpus` * `loader.eval_batch_size` * num_sample_batches
+      num_sample_log: 2
+      semi_ar: False
+      stride_length: 1
+      num_strides: 1
+
+    model:
+      name: tiny
+      type: ddit
+      hidden_size: 512
+      cond_dim: 128
+      length: 1024
+      n_blocks: 8
+      n_heads: 8
+      scale_by_sigma: True
+      dropout: 0.1
+      tie_word_embeddings: False
+    
+    loader:
+      batch_size: 64
+      num_workers: 4
+      pin_memory: True
+      
+    noise:
+      type: loglinear
+      sigma_min: 1e-4
+      sigma_max: 20
+
+    lr_scheduler:
+      _target_: transformers.get_constant_schedule_with_warmup
+      num_warmup_steps: 2500
+    
+  tokenizer:
+    _target_: evodiff.utils.Tokenizer
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  num_nodes: 1
+  devices: 1
+  gradient_clip_val: 1.0
+  precision: 'bf16'
+  num_sanity_val_steps: 2
+  max_epochs: 5 #2
+  log_every_n_steps: 10
+  limit_train_batches: 1.0   # train on full dataset, can be used to toggle quick run
+  limit_val_batches: 1.0     # validate on full dataset, can be used to toggle quick run
+  val_check_interval: 1.0
+
+train:
+  ngpu: 1
+  batch_size: 64
+  workers: 4
+  seed: 42
+
+data:
+  dataset_suffix: MSA
+  splits: [train, validation]
+  

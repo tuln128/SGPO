@@ -1,0 +1,6 @@
+exp_name: pretraining
+wandb_project: guided-diffusion-protein
+
+defaults:
+  - data: TrpB
+  - pretrain_model: continuous_ESM

@@ -62,7 +62,9 @@ def get_loaders(config):
         collater = CausalCollater(tokenizer=tokenizer, reverse=True) #randomly reverse some of the sequences can improve training #max_len=config.data.seq_len
     elif "mdlm" in config.pretrain_model.name or "udlm" in config.pretrain_model.name:
         tokenizer = hydra.utils.instantiate(config.pretrain_model.model.tokenizer, sequences=True)
-        collater = MDLMCollater(tokenizer=tokenizer)
+        collater = MDLMCollater(tokenizer=tokenizer,
+                               max_len=config.data.seq_len    # ← pass fixed length from data YAML
+                            )
            
     dsets = [SequenceDataset(config, split) for split in config.pretrain_model.data.splits]
 
