@@ -51,7 +51,11 @@ class ByteNetDiffusion(BaseModel):
             self.tokenizer = tokenizer
             self.padding_idx = self.tokenizer.pad_id  # PROTEIN_ALPHABET.index(PAD)
             self.masking_idx = self.tokenizer.mask_id
-            self.network = hydra.utils.instantiate(network, n_tokens=len(MSA_ALPHABET), padding_idx=self.masking_idx)
+            
+            self.network = hydra.utils.instantiate(
+                network,
+                n_tokens=len(self.tokenizer.alphabet),  # ← uses actual vocab size (32)
+                padding_idx=self.masking_idx)
 
             #network.n_tokens = len(MSA_ALPHABET)
             #network.padding_idx = self.masking_idx
@@ -81,7 +85,13 @@ class ByteNetDiffusion(BaseModel):
         timestep = timestep.to(self.device)
         src = src.to(self.device)
         tgt = tgt.to(self.device)
+        # Padding mask — excludes padded positions from loss
         input_mask = (src != self.padding_idx).float()
+
+        # ✅ Also exclude concat token positions from loss
+        if hasattr(self.tokenizer, 'concat_id'):
+            concat_mask = (src != self.tokenizer.concat_id).float()
+            input_mask = input_mask * concat_mask
 
         n_tokens = input_mask.sum()
 
