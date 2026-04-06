@@ -175,6 +175,23 @@ class GaussianDiffusionTransformer(nn.Module):
             self.in_channels = self.esm_model.embed_dim
             if use_esm_head:
                 config.hidden_size = self.esm_model.embed_dim #added this for now, goes from 512 to 480 which is not a big difference
+
+            # ─── ADD THIS BLOCK ──────────────────────────────────────────
+            # Extend embed_tokens if tokenizer has concat_id (e.g. '|' token)
+            if hasattr(self, '_tokenizer_vocab_size') or vocab_size > self.esm_model.embed_tokens.num_embeddings:
+                old_embed = self.esm_model.embed_tokens
+                old_num, embed_dim = old_embed.weight.shape   # (33, 480)
+                new_num = vocab_size                           # 34
+        
+                if new_num > old_num:
+                    new_embed = nn.Embedding(new_num, embed_dim,
+                                             padding_idx=old_embed.padding_idx)
+                    with torch.no_grad():
+                        new_embed.weight[:old_num] = old_embed.weight
+                        nn.init.normal_(new_embed.weight[old_num:], mean=0.0, std=0.02)
+                    self.esm_model.embed_tokens = new_embed
+            # ─────────────────────────────────────────────────────────────
+        
         else:
             # Without esm:
             self.in_channels = in_channels
@@ -204,7 +221,28 @@ class GaussianDiffusionTransformer(nn.Module):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         if use_esm_head and esm_model_name is not None:
-            self.cls = self.esm_model.lm_head #finetuning this is better than leaving it fixed, according to DiMA
+            # Extend lm_head if vocab_size > ESM original vocab
+            old_lm = self.esm_model.lm_head
+            # ESM2 lm_head: ESM2ContactPredictionHead or ESMContactPredictionHead
+            # The final projection is at old_lm.weight (tied to embed_tokens)
+            # and old_lm.bias — but ESM uses weight tying, so we need to
+            # replace the bias and re-tie or just use a new Linear
+            
+            # Simpler: wrap with a new output Linear on top
+            old_out_features = old_lm.weight.shape[0]   # 33
+            new_out_features = vocab_size               # 34
+        
+            if new_out_features > old_out_features:
+                hidden_dim = old_lm.weight.shape[1]
+                new_linear = nn.Linear(hidden_dim, new_out_features)
+                with torch.no_grad():
+                    new_linear.weight[:old_out_features] = old_lm.weight
+                    new_linear.bias[:old_out_features]   = old_lm.bias
+                    nn.init.normal_(new_linear.weight[old_out_features:], std=0.02)
+                    nn.init.zeros_(new_linear.bias[old_out_features:])
+                self.cls = new_linear
+            else:
+                self.cls = old_lm
         else:
             self.cls = BertOnlyMLMHead(config)
 
