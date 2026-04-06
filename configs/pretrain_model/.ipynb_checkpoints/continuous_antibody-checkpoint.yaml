@@ -1,0 +1,45 @@
+name: continuous_antibody
+model:
+  _target_: models.pretraining.model.continuous_diffusion.GaussianDiffusion
+  model_config:
+    name: continuous_diffusion
+    _lambda: 0
+    mask: uniform
+    device: cuda
+  network:
+    _target_: models.pretraining.model.continuous_diffusion.GaussianDiffusionTransformer
+    in_channels: 128
+    vocab_size: 32             # ← updated from 31 to include '|'
+    dropout: 0.1
+    bert_config_name: "prajjwal1/bert-medium"
+    target_channels: 0
+    discr_stop_grad: True
+    esm_model_name: null
+  noise_schedule:
+    _target_: models.pretraining.collaters.GaussianDiffusionSchedule
+    timesteps: 500
+    noise_schedule: cosine
+    noise_scale: 1.0
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1e-4
+  lr_scheduler:
+    _target_: transformers.get_linear_schedule_with_warmup
+    num_warmup_steps: 10
+    num_training_steps: 10
+  tokenizer:
+    _target_: models.pretraining.tokenizer.pairedAntibodyTokenizer  # ← updated
+train:
+  seed: 42
+  gradient_clip: 10.0
+  min_epochs: 50
+  max_epochs: 50
+  early_stop_patience: 0
+  batch_size: 32             # ← reduced for longer paired sequences
+  val_interval: 1.0
+  log_interval: 10
+  workers: 4
+  ngpu: 1
+data:
+  dataset_suffix: MSA
+  splits: [train, validation]

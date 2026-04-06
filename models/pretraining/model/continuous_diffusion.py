@@ -460,8 +460,14 @@ class GaussianDiffusion(BaseModel):
     def forward(self, batch):
         # 'batch' might be a dict: {"seq", "corrupt_mask", "attn_mask", "labels"}
         input_ids = batch["seq"]
-        corrupt_mask = batch["corrupt_mask"]
         attn_mask = batch["attn_mask"]
+        corrupt_mask = batch["corrupt_mask"]
+        # ✅ Exclude concat token positions from loss
+        if hasattr(self.tokenizer, 'concat_id'):
+            concat_mask = (input_ids != self.tokenizer.concat_id).long()
+            attn_mask    = attn_mask * concat_mask
+            corrupt_mask = corrupt_mask * concat_mask
+            
         labels = batch.get("labels", None)
 
         # labels placeholder (should go in collater)
