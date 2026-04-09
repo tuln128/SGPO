@@ -199,7 +199,19 @@ class ProteinPredictorDataset(DiscreteData):
             if new_combos == []:
                 y_new = torch.zeros(0)
             else:
-                _, y_new = inference_oracle(new_combos, protein=self.data_config.name, model_path=self.data_config.oracle_model_path)          
+                #_, y_new = inference_oracle(new_combos, protein=self.data_config.name, model_path=self.data_config.oracle_model_path)          
+
+                # ── SKIP oracle if no oracle path configured ──────────────
+                if self.data_config.oracle_model_path is None:
+                    y_new = torch.zeros(len(new_combos))   # dummy scores
+                    print("WARNING: No oracle model path set, using dummy scores")
+                else:
+                    _, y_new = inference_oracle(
+                        new_combos,
+                        protein=self.data_config.name,
+                        model_path=self.data_config.oracle_model_path
+                    )
+                # ─────────────────────────────────────────────────────────
         
         self.y = y_new if self.y is None else torch.cat([self.y, y_new], dim=0)
 

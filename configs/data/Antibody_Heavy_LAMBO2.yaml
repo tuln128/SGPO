@@ -1,0 +1,13 @@
+name: Antibody_Heavy_LAMBO2
+data_path: data/Antibody_Heavy_LAMBO2/fitness.csv
+pretrain_data_prefix: data/Antibody_Heavy_LAMBO2/
+full_seq: QVQLQQSGPGLVKPSQTLSLTCTVSGGSVSSGSNYWSWIRQHPGKGLEWIGNIFYNGKTYYNPSLKSRVIISLNTSKNHFSLELNSVTAADTAVYYCARSPGGLFDFWGQGTLVTVSS # <- required for sampling, same sequence to run CloneLM
+seq_len: 256            # heavy chains ~120 residues, 256 is safe
+residues: [98, 99, 100, 101, 102, 103, 104, 105, 106, 107] # CDR3, mutated positions, this uses 1 indexing, if None, then use all residues
+seed: 42
+alphabet: 'ACDEFGHIKLMNPQRSTVWYBZXJOU-*#@!'   # ← | appended at the end
+alphabet_size: 31                                # no '|' token needed for single chain
+oracle_model_path: null    # ← no oracle for unconditional sampling oracle/checkpoints/Antibody_Heavy_LAMBO2
+heavy_max_len: 220
+light_max_len: 220
+sep_token: null          # ← no concatenation
