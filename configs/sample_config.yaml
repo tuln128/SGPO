@@ -11,6 +11,6 @@ pretrained_ckpt: d3pm_finetune/TrpB #continuous/TrpB
 
 defaults:
   - data: TrpB
-  - model: d3pm
+  - model: d3pm #mdlm
   #- problem: protein_classifier_discrete
   #- algorithm: cls_guidance_discrete

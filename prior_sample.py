@@ -44,7 +44,19 @@ def main(config):
     # save config 
     OmegaConf.save(config, os.path.join(exp_dir, 'config.yaml'))
     data_config = config.data
-    seq_len = data_config.seq_len
+
+    # ── CHANGE 1: resolve seq_len from full_seq if available ─────
+    if data_config.full_seq is not None:
+        if isinstance(data_config.full_seq, (list, tuple)):
+            seq_len = len(data_config.full_seq[0])
+        else:
+            seq_len = len(data_config.full_seq)
+        OmegaConf.update(config, "data.seq_len", seq_len)
+        print(f"seq_len overridden from full_seq: {seq_len}")
+    else:
+        seq_len = data_config.seq_len
+        print(f"seq_len from config: {seq_len}")
+    # ─────────────────────────────────────────────────────────────
 
     sample_batch_size = config.num_samples if problem_config.sample_batch_size > config.num_samples else problem_config.sample_batch_size
     recursive = False if config.model.name == "mdlm" or config.model.name == "udlm" else True
@@ -59,7 +71,6 @@ def main(config):
 
         #run sampling for the initial round (with repeats)
         data_config = config.data
-        seq_len = data_config.seq_len
             
         if 'causalLM' in config.model.name:
             net = instantiate(config.model.model, load_ref_model=False, model_name=config.pretrained_ckpt, seq_len=seq_len, device=device) 
@@ -94,7 +105,6 @@ def main(config):
                 
                 print(f'Sampling prior values')
                 data_config = config.data
-                seq_len = data_config.seq_len
 
                 dataset = instantiate(problem_config.data, data_config=data_config, tokenizer=net.tokenizer)
                 sample(config, config.num_samples_per_round, algorithm, dataset, sample_batch_size, round, unique_only=True, BO=True) #make sure everything is unique
