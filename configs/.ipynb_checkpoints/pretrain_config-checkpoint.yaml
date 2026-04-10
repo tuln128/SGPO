@@ -1,5 +1,6 @@
 exp_name: pretraining
 wandb_project: guided-diffusion-protein
+ckpt_path: null    # ← add this line to enable resuming/additional training 
 
 defaults:
   - data: TrpB

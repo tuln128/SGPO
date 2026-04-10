@@ -52,7 +52,8 @@ def main(config):
             trainer.fit(
                 model=model,
                 train_dataloaders=train_loader,
-                val_dataloaders=validation_loader,
+                val_dataloaders=validation_loader
+                ckpt_path=config.ckpt_path if config.ckpt_path else None,  # ← add this to resume/enable evo- training
             )
 
             #save the lightning checkpoint as a state dict of the network that is compatible with EvoDiff - let's just do this during loading instead

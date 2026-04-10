@@ -73,10 +73,10 @@ def get_trainer(config):
         )
         callbacks = [hf_callback]
     elif "mdlm" in config.pretrain_model.name or "udlm" in config.pretrain_model.name:
-        checkpoint_callback = ModelCheckpoint(dirpath=save_path, filename="best_model", monitor="val/ppl", mode="min", save_top_k=1) #save_last=True #only keep the model with the lowest validation loss
+        checkpoint_callback = ModelCheckpoint(dirpath=save_path, filename="best_model", monitor="val/ppl", mode="min", save_top_k=1, save_last=True) #keep the model with the lowest validation loss and the last one
         callbacks = [checkpoint_callback]
     else:
-        checkpoint_callback = ModelCheckpoint(dirpath=save_path, filename="best_model", monitor="val_loss", mode="min", save_top_k=1) #only keep the model with the lowest validation loss
+        checkpoint_callback = ModelCheckpoint(dirpath=save_path, filename="best_model", monitor="val_loss", mode="min", save_top_k=1, save_last=True) #only keep the model with the lowest validation loss
         callbacks = [checkpoint_callback]
     
     experiment_name = config.exp_name + "-" + config.pretrain_model.name + "-" + config.data.name

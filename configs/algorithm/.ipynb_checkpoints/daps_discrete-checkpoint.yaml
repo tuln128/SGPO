@@ -1,0 +1,12 @@
+name: DAPS
+time_conditioned: False
+guidance_params: [16., 32., 64., 128., 256.] #[1., 0., 5., 25., 125., 625.] #[0.001, 0.01, 0.1, 1000, 10000] # #[0.1, 0.5, 1., 5., 25.] #[1., 10., 100., 1000., 10000.] 
+method:
+  _target_: sampling.daps.DAPS
+  num_steps: 50 #500
+  ode_steps: 20
+  mh_steps: 1000
+  alpha: 128. #default value
+  max_dist: 1
+  beta: 1000 # 1.0 for d3pm
+  n_max_mutations:
