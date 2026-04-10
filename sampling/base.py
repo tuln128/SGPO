@@ -21,7 +21,14 @@ class Algo(ABC):
         self.special_tokens = list(data_config.alphabet[20:])
 
         self.seq_len = data_config.seq_len
-        self.full_seq = [self.net.tokenizer.tokenize(s) for s in data_config.full_seq] if not causal_LM else data_config.full_seq
+        
+        if causal_LM:
+            self.full_seq = data_config.full_seq
+        elif data_config.full_seq is None:
+            self.full_seq = None
+        else:
+            self.full_seq = [self.net.tokenizer.tokenize(s) for s in data_config.full_seq]
+                
         self.full_seq_string = data_config.full_seq
 
         if data_config.residues is None:
@@ -34,9 +41,13 @@ class Algo(ABC):
         self.mask = torch.zeros(self.seq_len)
         self.mask[self.residues] = 1
         self.mask = self.mask.to(device).int()
+        
+        # ── Only convert to tensor if full_seq is not None ───────────
         if not causal_LM:
-            self.full_seq = torch.from_numpy(np.array(self.full_seq)).to(device).int().squeeze(-1)
-    
+            if self.full_seq is not None:
+                self.full_seq = torch.from_numpy(np.array(self.full_seq)).to(device).int().squeeze(-1)
+        # ─────────────────────────────────────────────────────────────
+        
     def project_sequences(self, sequences):
         #remove special characters (assume this is rare)
         #alternatively, could just toss out sequences that have bad characters
@@ -46,6 +57,11 @@ class Algo(ABC):
                     if s not in self.alphabet:
                         seq = seq.replace(s, np.random.choice(self.alphabet))
                 new_sequences.append(seq)
+
+        # ── Only apply mutation constraint if full_seq and n_max_mutations are set ──
+        if self.full_seq_string is None or self.n_max_mutations is None:
+            return new_sequences    # ← unconditional generation, no constraint needed
+        # ────────────────────────────────────────────────────────────────────────────
 
         if self.n_residues > 4 and self.n_max_mutations is not None:
             for i, seq in enumerate(new_sequences):

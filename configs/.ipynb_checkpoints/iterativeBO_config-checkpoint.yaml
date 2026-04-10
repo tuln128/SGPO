@@ -1,0 +1,21 @@
+exp_name: iterative_BO #alignment_1000 #change this to save results in a different directory
+num_samples: 100 #number of samples per round
+random_init: False
+BO: True #whether to use sample acquisition like Bayesian optimization. If using BO, set to True and does not acquire new sequences that have been previously sampled. 
+
+# save_dir: checkpoints/classifiers
+n_repeats: 5
+seed: 42
+num_rounds: 8
+pretrained_ckpt: continuous/TrpB
+n_ensemble: 10 #number of classifiers/finetuned models to ensemble, automatically overridden to None if the problem is set to a GP model
+thompson_sampling: True #whether to use Thompson sampling for sample acquisition
+
+process:
+  _target_: torch.multiprocessing.Process
+  
+defaults:
+  - data: TrpB
+  - model: d3pm
+  - problem: protein_classifier_discrete
+  - algorithm: cls_guidance_discrete

@@ -21,6 +21,8 @@ class Classifier_Guidance_Inpaint(Algo):
         self.forward_op = classifier.eval() #make sure the model is in eval mode
 
     def project(self, x):
+        if self.full_seq is None:
+            return x    # no projection needed for unconditional generation
         return x * self.mask + self.full_seq * (1 - self.mask)
 
     def inference(self, num_samples=1, verbose=False, detokenize=False, inpaint=False):
